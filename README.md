@@ -1,62 +1,99 @@
 # mOOn.com — Campus Ecommerce for Ghanaian Colleges
 
-> Shop campus-only or go nationwide. Textbooks, food, fashion, electronics — everything delivered.
+> Shop campus-only or go nationwide. Textbooks, food, fashion, electronics — delivered.
+> **Stack: React · Express · Prisma · PostgreSQL**
 
 ---
 
 ## Project Structure
 
 ```
-moon-app/
-├── backend/          # Express + MongoDB API
-│   ├── models/       # Mongoose schemas (User, Shop, Product, Order)
-│   ├── routes/       # auth, shops, products, orders, admin
-│   ├── middleware/   # JWT auth + role guard
-│   ├── config/       # DB connection
-│   └── server.js     # Entry point
+moon-final/
+├── backend/
+│   ├── prisma/
+│   │   ├── schema.prisma      ← All models & relations
+│   │   └── seed.js            ← Seeds admin, vendor, shop, products
+│   ├── src/
+│   │   ├── middleware/
+│   │   │   └── auth.js        ← JWT protect + requireRole
+│   │   ├── routes/
+│   │   │   ├── auth.js        ← register, login, /me, preferences
+│   │   │   ├── shops.js       ← campus/scope-filtered shop listing + CRUD
+│   │   │   ├── products.js    ← scope-filtered products + vendor CRUD
+│   │   │   ├── orders.js      ← place order, list, status updates
+│   │   │   └── admin.js       ← stats, shop verification, user management
+│   │   ├── prismaClient.js    ← Prisma singleton
+│   │   └── server.js          ← Express entry point
+│   ├── .env.example
+│   └── package.json
 │
-└── frontend/         # React app
+└── frontend/
     └── src/
-        ├── api/       # Axios API client
-        ├── context/   # AuthContext, CartContext
-        └── pages/     # LandingPage, StorePage, AuthPage, VendorPage, AdminPage
+        ├── api/index.js           ← Axios client + all API calls
+        ├── context/
+        │   ├── AuthContext.jsx    ← login/register/logout/preferences
+        │   └── CartContext.jsx    ← cart state with single-shop enforcement
+        └── pages/
+            ├── LandingPage.jsx    ← Marketing homepage
+            ├── StorePage.jsx      ← Storefront with campus/nationwide toggle
+            ├── AuthPage.jsx       ← Login + Register
+            ├── VendorPage.jsx     ← Vendor dashboard
+            └── AdminPage.jsx      ← Admin dashboard
 ```
 
 ---
 
 ## Backend Setup
 
+### 1. Install dependencies
 ```bash
 cd backend
-cp .env.example .env
-# Edit .env — set MONGODB_URI and JWT_SECRET
-
 npm install
-npm run dev         # nodemon on port 5000
 ```
 
-### API Endpoints
+### 2. Configure environment
+```bash
+cp .env.example .env
+# Fill in your PostgreSQL DATABASE_URL and JWT_SECRET
+```
 
-| Method | Route | Access | Description |
-|--------|-------|--------|-------------|
-| POST | /api/auth/register | Public | Register student/vendor |
-| POST | /api/auth/login | Public | Login |
-| GET | /api/auth/me | Auth | Get current user |
-| PATCH | /api/auth/preferences | Auth | Update campus/scope preference |
-| GET | /api/shops | Public | List shops (filtered by campus/scope) |
-| POST | /api/shops | Vendor | Create shop |
-| PATCH | /api/shops/:id | Vendor | Update shop |
-| GET | /api/products | Public | List products (filtered by campus/scope) |
-| POST | /api/products | Vendor | Add product |
-| PATCH | /api/products/:id | Vendor | Update product |
-| DELETE | /api/products/:id | Vendor | Delete product |
-| POST | /api/orders | Customer | Place order |
-| GET | /api/orders | Auth | List orders |
-| PATCH | /api/orders/:id/status | Vendor | Update order status |
-| GET | /api/admin/stats | Admin | Dashboard stats |
-| GET | /api/admin/shops | Admin | All shops |
-| PATCH | /api/admin/shops/:id/verify | Admin | Verify/unverify shop |
-| GET | /api/admin/users | Admin | All users |
+`.env` example:
+```
+DATABASE_URL="postgresql://postgres:password@localhost:5432/moondb?schema=public"
+JWT_SECRET=your_long_random_secret
+PORT=5000
+```
+
+### 3. Run migrations (auto-generates SQL from schema.prisma)
+```bash
+npx prisma migrate dev --name init
+```
+
+### 4. Seed the database
+```bash
+npm run db:seed
+```
+
+Seeded accounts:
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@moon.com | admin123 |
+| Vendor | vendor@moon.com | vendor123 |
+| Customer | student@ug.edu.gh | customer123 |
+
+### 5. Start the server
+```bash
+npm run dev      # development (nodemon)
+npm start        # production
+```
+
+### Useful Prisma commands
+```bash
+npx prisma studio          # Visual DB browser at localhost:5555
+npx prisma migrate dev     # Create + apply a new migration
+npx prisma migrate deploy  # Apply migrations in production
+npx prisma generate        # Regenerate Prisma Client after schema changes
+```
 
 ---
 
@@ -65,61 +102,52 @@ npm run dev         # nodemon on port 5000
 ```bash
 cd frontend
 npm install
-npm start           # React app on port 3000
+npm start     # React app on http://localhost:3000
 ```
 
-Proxy is configured to forward /api requests to localhost:5000.
-
-### Pages
-
-| Route | Page | Notes |
-|-------|------|-------|
-| / | LandingPage | Marketing homepage |
-| /shop | StorePage | Main storefront with campus/nationwide toggle |
-| /login | AuthPage | Sign in |
-| /register | AuthPage | Register (student or vendor) |
-| /vendor | VendorPage | Vendor dashboard (protected) |
-| /admin | AdminPage | Admin dashboard (protected) |
+The React app proxies all `/api` requests to `localhost:5000`.
 
 ---
 
-## Key Feature: Campus vs Nationwide Scope
+## API Endpoints
 
-Users set their **shop preference** on registration (or update it anytime):
-
-- **Campus mode** → shows only shops on the user's selected campus + nationwide shops
-- **Nationwide mode** → shows all verified shops across Ghana
-
-Vendors also set their **shop scope**:
-- `campus` → only visible to students on that campus
-- `region` → visible regionally
-- `nationwide` → visible to all students in Ghana
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST | /api/auth/register | Public | Register student or vendor |
+| POST | /api/auth/login | Public | Login |
+| GET | /api/auth/me | Auth | Current user |
+| PATCH | /api/auth/preferences | Auth | Update campus/scope |
+| GET | /api/shops | Public | Shops filtered by campus/scope |
+| POST | /api/shops | Vendor | Create shop |
+| PATCH | /api/shops/:id | Vendor | Update shop |
+| GET | /api/shops/vendor/mine | Vendor | Own shop |
+| GET | /api/products | Public | Products filtered by campus/scope |
+| POST | /api/products | Vendor | Add product |
+| PATCH | /api/products/:id | Vendor | Update product |
+| DELETE | /api/products/:id | Vendor | Delete product |
+| GET | /api/products/vendor/mine | Vendor | Own products |
+| POST | /api/orders | Customer | Place order |
+| GET | /api/orders | Auth | List orders |
+| GET | /api/orders/:id | Auth | Order detail |
+| PATCH | /api/orders/:id/status | Vendor | Update order status |
+| GET | /api/admin/stats | Admin | Dashboard stats |
+| GET | /api/admin/users | Admin | All users |
+| GET | /api/admin/shops | Admin | All shops |
+| PATCH | /api/admin/shops/:id/verify | Admin | Verify shop |
+| DELETE | /api/admin/users/:id | Admin | Delete user |
 
 ---
 
-## Seeding an Admin
+## Campus vs Nationwide Scope
 
-After starting the server, create an admin via MongoDB directly or add a seed script:
+Users set their **shopScope** on registration and can change it anytime:
 
-```js
-// seed-admin.js (run once)
-require('dotenv').config();
-const mongoose = require('mongoose');
-const User = require('./models/User');
+- **`campus`** → sees shops on their selected campus + any nationwide shops
+- **`nationwide`** → sees all verified shops across Ghana
 
-mongoose.connect(process.env.MONGODB_URI).then(async () => {
-  await User.create({
-    name: 'Admin',
-    email: 'admin@moon.com',
-    password: 'admin123',
-    role: 'admin',
-    campus: 'University of Ghana, Legon'
-  });
-  console.log('Admin created');
-  process.exit();
-});
-```
+Shops also declare their **scope**:
+- **`campus`** → only visible to students on that campus
+- **`region`** → visible region-wide
+- **`nationwide`** → visible to all students in Ghana
 
-```bash
-node seed-admin.js
-```
+This filtering happens at the database level in both `/api/shops` and `/api/products`.

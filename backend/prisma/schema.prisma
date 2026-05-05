@@ -1,0 +1,186 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ─────────────────────────────────────────────────────────────────
+
+enum Role {
+  customer
+  vendor
+  admin
+}
+
+enum ShopScope {
+  campus
+  region
+  nationwide
+}
+
+enum UserShopScope {
+  campus
+  nationwide
+}
+
+enum Category {
+  textbooks
+  stationery
+  electronics
+  snacks
+  fashion
+  services
+  general
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  preparing
+  out_for_delivery
+  delivered
+  cancelled
+}
+
+enum PaymentMethod {
+  mobile_money
+  cash_on_delivery
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+}
+
+enum Campus {
+  University_of_Ghana_Legon
+  KNUST_Kumasi
+  University_of_Cape_Coast
+  University_of_Professional_Studies
+  University_of_Energy_and_Natural_Resources
+  Ghana_Institute_of_Management_and_Public_Administration
+  University_of_Health_and_Allied_Sciences
+}
+
+// ─── Models ────────────────────────────────────────────────────────────────
+
+model User {
+  id                 String          @id @default(uuid())
+  name               String          @db.VarChar(150)
+  email              String          @unique @db.VarChar(255)
+  password           String          @db.VarChar(255)
+  phone              String?         @db.VarChar(20)
+  role               Role            @default(customer)
+  campus             Campus?
+  shopScope          UserShopScope   @default(campus) @map("shop_scope")
+  region             String?         @db.VarChar(100)
+  deliveryAddresses  Json            @default("[]") @map("delivery_addresses")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  shop               Shop?
+  orders             Order[]
+
+  @@map("users")
+}
+
+model Shop {
+  id                    String     @id @default(uuid())
+  ownerId               String     @unique @map("owner_id")
+  name                  String     @db.VarChar(200)
+  description           String?    @db.Text
+  logo                  String?
+  coverImage            String?    @map("cover_image")
+  category              Category
+  scope                 ShopScope  @default(campus)
+  campus                Campus?
+  region                String?    @db.VarChar(100)
+  contactPhone          String?    @map("contact_phone") @db.VarChar(20)
+  contactEmail          String?    @map("contact_email") @db.VarChar(255)
+  isVerified            Boolean    @default(false) @map("is_verified")
+  isActive              Boolean    @default(true) @map("is_active")
+  rating                Float      @default(0)
+  reviewCount           Int        @default(0) @map("review_count")
+  deliveryFee           Float      @default(0) @map("delivery_fee")
+  minOrderAmount        Float      @default(0) @map("min_order_amount")
+  estimatedDeliveryTime String     @default("30-45 mins") @map("estimated_delivery_time")
+  createdAt             DateTime   @default(now()) @map("created_at")
+  updatedAt             DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  owner                 User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  products              Product[]
+  orders                Order[]
+
+  @@map("shops")
+}
+
+model Product {
+  id            String    @id @default(uuid())
+  shopId        String    @map("shop_id")
+  name          String    @db.VarChar(200)
+  description   String?   @db.Text
+  price         Float
+  originalPrice Float?    @map("original_price")
+  images        String[]  @default([])
+  category      Category
+  tags          String[]  @default([])
+  stock         Int       @default(0)
+  isAvailable   Boolean   @default(true) @map("is_available")
+  rating        Float     @default(0)
+  reviewCount   Int       @default(0) @map("review_count")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  shop          Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  orderItems    OrderItem[]
+
+  @@map("products")
+}
+
+model Order {
+  id              String        @id @default(uuid())
+  customerId      String        @map("customer_id")
+  shopId          String        @map("shop_id")
+  subtotal        Float
+  deliveryFee     Float         @default(0) @map("delivery_fee")
+  total           Float
+  deliveryAddress Json          @map("delivery_address")
+  status          OrderStatus   @default(pending)
+  paymentMethod   PaymentMethod @default(cash_on_delivery) @map("payment_method")
+  paymentStatus   PaymentStatus @default(unpaid) @map("payment_status")
+  notes           String?       @db.Text
+  statusHistory   Json          @default("[]") @map("status_history")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  customer        User        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  shop            Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items           OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String  @map("order_id")
+  productId String? @map("product_id")
+  name      String  @db.VarChar(200)
+  price     Float
+  quantity  Int
+  image     String  @default("")
+
+  // Relations
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@map("order_items")
+}
